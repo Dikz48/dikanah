@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIKZ AI ASSISTANT</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link href="/css/theme.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+  <style>
+    .auth-page { display: none; }
+    .auth-page.active { display: flex; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loading" class="loading-screen">
+      <div class="loading-content">
+        <div class="loading-logo">DIKZ AI</div>
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Memulai sistem...</div>
+        <div class="loading-version">v1.0</div>
+      </div>
+    </div>
+
+    <!-- Auth Pages -->
+    <div id="authContainer">
+      <!-- Login Screen -->
+      <div id="loginPage" class="auth-page active auth-container">
+        <div class="auth-box">
+          <div class="auth-logo">DIKZ AI</div>
+          <div class="auth-title">ASSISTANT</div>
+          <div class="auth-subtitle">Artificial Intelligence Assistant</div>
+          <form onsubmit="handleLogin(event)" class="auth-form">
+            <input type="email" placeholder="Email" required class="auth-input">
+            <input type="password" placeholder="Password" required class="auth-input">
+            <button type="submit" class="auth-btn">Login</button>
+          </form>
+          <div class="auth-link">
+            Belum punya akun? <a onclick="switchPage('registerPage')">Daftar</a>
+          </div>
+          <div class="auth-link">
+            <a onclick="switchPage('forgotPage')">Lupa Password?</a>
+          </div>
+        </div>
+        <div class="auth-particles"></div>
+      </div>
+
+      <!-- Register Screen -->
+      <div id="registerPage" class="auth-page auth-container">
+        <div class="auth-box">
+          <div class="auth-logo">DIKZ AI</div>
+          <div class="auth-title">DAFTAR</div>
+          <div class="auth-subtitle">Buat Akun Baru</div>
+          <form onsubmit="handleRegister(event)" class="auth-form">
+            <input type="text" placeholder="Nama Lengkap" required class="auth-input">
+            <input type="email" placeholder="Email" required class="auth-input">
+            <input type="password" placeholder="Password" required class="auth-input">
+            <input type="password" placeholder="Konfirmasi Password" required class="auth-input">
+            <button type="submit" class="auth-btn">Daftar</button>
+          </form>
+          <div class="auth-link">
+            Sudah punya akun? <a onclick="switchPage('loginPage')">Login</a>
+          </div>
+        </div>
+        <div class="auth-particles"></div>
+      </div>
+
+      <!-- Forgot Password Screen -->
+      <div id="forgotPage" class="auth-page auth-container">
+        <div class="auth-box">
+          <div class="auth-logo">DIKZ AI</div>
+          <div class="auth-title">RESET PASSWORD</div>
+          <div class="auth-subtitle">Masukkan Email Anda</div>
+          <form onsubmit="handleForgot(event)" class="auth-form">
+            <input type="email" placeholder="Email" required class="auth-input">
+            <button type="submit" class="auth-btn">Kirim Link Reset</button>
+          </form>
+          <div class="auth-link">
+            Ingat password? <a onclick="switchPage('loginPage')">Login</a>
+          </div>
+        </div>
+        <div class="auth-particles"></div>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="main" style="display:none">
+      <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-logo">DIKZ AI</div>
+            <div class="sidebar-status">
+              <span id="statusIndicator" class="status-online">●</span>
+              <span id="statusText">Online</span>
+            </div>
+          </div>
+
+          <div class="sidebar-nav">
+            <a href="/" class="nav-item active">
+              <span>🏠</span> Home
+            </a>
+            <a href="/chat" class="nav-item">
+              <span>💬</span> Chat
+            </a>
+            <a href="/history" class="nav-item">
+              <span>📜</span> History
+            </a>
+            <a href="/settings" class="nav-item">
+              <span>⚙️</span> Settings
+            </a>
+            <a href="/about" class="nav-item">
+              <span>ℹ️</span> About
+            </a>
+            <a href="/support" class="nav-item">
+              <span>🆘</span> Support
+            </a>
+          </div>
+
+          <div class="sidebar-footer">
+            <div class="sidebar-version">v1.0</div>
+          </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 main-content">
+          <div id="content" class="home-page">
+            <div class="home-hero">
+              <div class="home-badge">● SYSTEM ONLINE</div>
+              <h1>DIKZ AI ASSISTANT</h1>
+              <p>Asisten AI cepat, aman, dan siap bantu ngoding, debugging, sampai brainstorming — kapan aja.</p>
+              <div class="home-actions">
+                <a href="/chat" class="btn-primary">💬 Mulai Chat</a>
+                <a href="/history" class="btn-secondary">📜 Lihat History</a>
+              </div>
+            </div>
+
+            <div class="home-grid">
+              <a href="/chat" class="home-card">
+                <div class="home-card-icon">💬</div>
+                <div class="home-card-title">Chat</div>
+                <div class="home-card-desc">Ngobrol langsung dengan AI, real-time streaming.</div>
+              </a>
+              <a href="/history" class="home-card">
+                <div class="home-card-icon">📜</div>
+                <div class="home-card-title">History</div>
+                <div class="home-card-desc">Semua percakapan tersimpan rapi, bisa dicari.</div>
+              </a>
+              <a href="/settings" class="home-card">
+                <div class="home-card-icon">⚙️</div>
+                <div class="home-card-title">Settings</div>
+                <div class="home-card-desc">Atur model, temperature, dan system prompt.</div>
+              </a>
+              <a href="/about" class="home-card">
+                <div class="home-card-icon">ℹ️</div>
+                <div class="home-card-title">About</div>
+                <div class="home-card-desc">Info lengkap seputar DIKZ AI.</div>
+              </a>
+              <a href="/support" class="home-card">
+                <div class="home-card-icon">🆘</div>
+                <div class="home-card-title">Support</div>
+                <div class="home-card-desc">Butuh bantuan? Hubungi kami di sini.</div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/utils.js"></script>
+</body>
+</html>
