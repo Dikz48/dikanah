@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat - DIKZ AI</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link href="/css/theme.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+  <style>
+    .chat-sidebar { display: none; }
+    .chat-sidebar.mobile-open { display: block; }
+    @media (min-width: 1024px) {
+      .chat-sidebar { display: flex; }
+      .chat-main-area { margin-left: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="chat-page-wrapper">
+    <!-- Chat Sidebar (Mobile Hidden) -->
+    <div id="chatSidebar" class="chat-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">DIKZ</div>
+        <button onclick="closeSidebar()" class="btn-icon-mini">✕</button>
+      </div>
+      
+      <div class="sidebar-new-chat">
+        <button onclick="newChat()" class="btn-new-chat">+ New Chat</button>
+      </div>
+      
+      <div id="chatHistory" class="sidebar-chat-history">
+        <!-- Chat history will be rendered here -->
+      </div>
+      
+      <div class="sidebar-footer">
+        <a href="/" class="btn-icon-text">🏠 Home</a>
+        <a href="/history" class="btn-icon-text">📜 History</a>
+        <a href="/settings" class="btn-icon-text">⚙️ Settings</a>
+        <button onclick="logout()" class="btn-icon-text danger">🚪 Logout</button>
+      </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="chat-main-area">
+      <div class="chat-container">
+        <div class="chat-header">
+          <button onclick="toggleSidebar()" class="btn-menu">☰</button>
+          <div class="chat-title">DIKZ AI Chat</div>
+          <div class="chat-actions">
+            <button onclick="exportChat()" class="btn-icon" title="Export">📤</button>
+            <button onclick="clearChat()" class="btn-icon" title="Clear">🗑️</button>
+          </div>
+        </div>
+
+        <div id="chatMessages" class="chat-messages">
+          <!-- Messages will be rendered here -->
+        </div>
+
+        <div class="chat-input-container">
+          <div class="chat-input-wrapper">
+            <div class="input-actions">
+              <button id="stopBtn" class="stop-btn" style="display:none" title="Stop">⏹</button>
+            </div>
+            <div class="input-main">
+              <textarea id="chatInput" rows="1" placeholder="Ketik pesan... (Ctrl+Enter untuk kirim)"></textarea>
+              <button id="sendBtn" class="send-btn" title="Send">➤</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/chat.js"></script>
+</body>
+</html>
