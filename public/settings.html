@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - DIKZ AI</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+  <link href="/css/style.css" rel="stylesheet">
+  <link href="/css/theme.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+</head>
+<body>
+  <div id="app" class="settings-page">
+    <div class="settings-container">
+      <a href="/chat" class="text-sm text-blue-400 hover:underline mb-4 block">← Back to Chat</a>
+      <h1>⚙️ Settings</h1>
+
+      <div class="settings-section">
+        <h2>Theme</h2>
+        <div class="settings-option">
+          <label>Mode</label>
+          <select id="themeSelect" onchange="updateTheme()">
+            <option value="dark">Dark Mode</option>
+            <option value="light">Light Mode</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>AI Model</h2>
+        <div class="settings-option">
+          <label>Model</label>
+          <select id="modelSelect">
+            <!-- NAMA BRANDING DIKZ -->
+            <option value="Dikz-4.1">Dikz-4.1 Mini - Free</option>
+            <option value="Dikz-4-turbo">Dikz-4 Turbo - Free</option>
+            <option value="Dikz-3.5-turbo">Dikz-3.5 Turbo - Free</option>
+            <option value="Dikz-4o" disabled>🔒 Dikz-4o - Premium Only</option> <!-- DIKUNCI -->
+          </select>
+          <p class="text-xs text-gray-400 mt-1">Upgrade ke Premium buat buka Dikz-4o</p>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>Parameters</h2>
+        <div class="settings-option">
+          <label>Temperature: <span id="tempValue">0.7</span></label>
+          <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" oninput="updateParam('temperature', this.value)">
+        </div>
+        <div class="settings-option">
+          <label>Max Tokens: <span id="tokensValue">4096</span></label>
+          <input type="range" id="maxTokens" min="100" max="8192" step="100" value="4096" oninput="updateParam('maxTokens', this.value)">
+        </div>
+        <div class="settings-option">
+          <label>Top P: <span id="topPValue">1.0</span></label>
+          <input type="range" id="topP" min="0" max="1" step="0.1" value="1.0" oninput="updateParam('topP', this.value)">
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>System Prompt</h2>
+        <div class="settings-option">
+          <textarea id="systemPrompt" rows="3" placeholder="Kamu adalah DIKZ AI, asisten yang membantu..."></textarea>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>Danger Zone</h2>
+        <button onclick="clearCache()" class="btn-danger">🗑️ Clear Cache</button>
+      </div>
+
+      <div class="settings-actions">
+        <button onclick="saveSettings()" class="btn-primary">💾 Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/settings.js"></script>
+</body>
+</html>
