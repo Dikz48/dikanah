@@ -44,7 +44,7 @@ function renderHistory(chats) {
     const pinIcon = chat.pinned ? '📌' : '';
 
     item.innerHTML = `
-      <div class="history-item-info" onclick="openChat(${chat.id})">
+      <div class="history-item-info" onclick="openChat('${chat.id}')">
         <div class="history-item-title">${pinIcon} ${escapeHtml(chat.title)}</div>
         <div class="history-item-meta">
           ${chat.message_count || 0} messages • ${formatDate(chat.updated_at)}
@@ -52,9 +52,9 @@ function renderHistory(chats) {
         </div>
       </div>
       <div class="history-item-actions">
-        <button onclick="togglePin(${chat.id}, ${chat.pinned})" class="btn-icon" title="Pin">${chat.pinned ? '📌' : '📍'}</button>
-        <button onclick="renameChat(${chat.id})" class="btn-icon" title="Rename">✏️</button>
-        <button onclick="deleteChat(${chat.id})" class="btn-icon" title="Delete">🗑️</button>
+        <button onclick="togglePin('${chat.id}', ${chat.pinned})" class="btn-icon" title="Pin">${chat.pinned ? '📌' : '📍'}</button>
+        <button onclick="renameChat('${chat.id}')" class="btn-icon" title="Rename">✏️</button>
+        <button onclick="deleteChat('${chat.id}')" class="btn-icon" title="Delete">🗑️</button>
       </div>
     `;
 
