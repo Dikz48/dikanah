@@ -383,11 +383,11 @@ function renderChatHistory() {
   }
   
   historyContainer.innerHTML = allChats.map(chat => `
-    <div class="history-item-chat" onclick="selectChat(${chat.id})">
+    <div class="history-item-chat" onclick="selectChat('${chat.id}')">
       <span class="history-item-chat-title">${escapeHtml(chat.title)}</span>
       <div class="history-item-actions">
-        <button class="btn-action-small" onclick="renameChat(${chat.id}); event.stopPropagation();" title="Rename">✎</button>
-        <button class="btn-action-small" onclick="deleteChat(${chat.id}); event.stopPropagation();" title="Delete">🗑</button>
+        <button class="btn-action-small" onclick="renameChat('${chat.id}'); event.stopPropagation();" title="Rename">✎</button>
+        <button class="btn-action-small" onclick="deleteChat('${chat.id}'); event.stopPropagation();" title="Delete">🗑</button>
       </div>
     </div>
   `).join('');
