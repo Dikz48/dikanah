@@ -1,37 +1,54 @@
-const { getDb } = require('../database');
+const mongoose = require('mongoose');
+const { Chat, Message } = require('../database');
+
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
+function formatChat(c, extra = {}) {
+  return {
+    id: c._id.toString(),
+    title: c.title,
+    pinned: !!c.pinned,
+    folder: c.folder || null,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+    ...extra
+  };
+}
 
 exports.getHistory = async (req, res) => {
   try {
-    const db = getDb();
     const { limit = 50, offset = 0, search = '' } = req.query;
 
-    let query = `
-      SELECT c.*, 
-        (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count,
-        (SELECT content FROM messages WHERE chat_id = c.id AND role = 'assistant' ORDER BY timestamp DESC LIMIT 1) as last_message
-      FROM chats c
-    `;
-
-    let params = [];
+    const match = {};
 
     if (search && search.trim() !== '') {
-      query += ` WHERE c.title LIKE ? OR EXISTS (
-        SELECT 1 FROM messages m WHERE m.chat_id = c.id AND m.content LIKE ?
-      )`;
-      params.push(`%${search}%`, `%${search}%`);
+      const regex = new RegExp(search.trim(), 'i');
+      const matchingChatIds = await Message.find({ content: regex }).distinct('chat_id');
+      match.$or = [{ title: regex }, { _id: { $in: matchingChatIds } }];
     }
 
-    query += ` ORDER BY c.pinned DESC, c.updated_at DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    const chats = await Chat.find(match)
+      .sort({ pinned: -1, updated_at: -1 })
+      .skip(parseInt(offset) || 0)
+      .limit(parseInt(limit) || 50)
+      .lean();
 
-    const chats = await new Promise((resolve, reject) => {
-      db.all(query, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+    const results = await Promise.all(
+      chats.map(async (c) => {
+        const message_count = await Message.countDocuments({ chat_id: c._id });
+        const lastMsg = await Message.findOne({ chat_id: c._id, role: 'assistant' })
+          .sort({ timestamp: -1 })
+          .lean();
+        return formatChat(c, {
+          message_count,
+          last_message: lastMsg ? lastMsg.content : null
+        });
+      })
+    );
 
-    res.json({ chats, total: chats.length });
+    res.json({ chats: results, total: results.length });
   } catch (error) {
     console.error('Get history error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -40,32 +57,29 @@ exports.getHistory = async (req, res) => {
 
 exports.getChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
 
-    const chat = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM chats WHERE id = ?', [id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
 
+    const chat = await Chat.findById(id).lean();
     if (!chat) {
       return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
     }
 
-    const messages = await new Promise((resolve, reject) => {
-      db.all(
-        'SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp ASC',
-        [id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const messages = await Message.find({ chat_id: id }).sort({ timestamp: 1 }).lean();
 
-    res.json({ chat, messages });
+    res.json({
+      chat: formatChat(chat),
+      messages: messages.map((m) => ({
+        id: m._id.toString(),
+        chat_id: id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp
+      }))
+    });
   } catch (error) {
     console.error('Get chat error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -74,21 +88,9 @@ exports.getChat = async (req, res) => {
 
 exports.createChat = async (req, res) => {
   try {
-    const db = getDb();
     const { title } = req.body;
-
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO chats (title, created_at, updated_at) VALUES (?, datetime("now"), datetime("now"))',
-        [title || 'Chat Baru'],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.lastID);
-        }
-      );
-    });
-
-    res.json({ id: result, title: title || 'Chat Baru' });
+    const chat = await Chat.create({ title: title || 'Chat Baru' });
+    res.json({ id: chat._id.toString(), title: chat.title });
   } catch (error) {
     console.error('Create chat error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -97,33 +99,18 @@ exports.createChat = async (req, res) => {
 
 exports.updateChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
     const { title, folder } = req.body;
 
-    let query = 'UPDATE chats SET updated_at = datetime("now")';
-    let params = [];
-
-    if (title !== undefined) {
-      query += ', title = ?';
-      params.push(title);
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
     }
 
-    if (folder !== undefined) {
-      query += ', folder = ?';
-      params.push(folder || null);
-    }
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (folder !== undefined) update.folder = folder || null;
 
-    query += ' WHERE id = ?';
-    params.push(id);
-
-    await new Promise((resolve, reject) => {
-      db.run(query, params, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
+    await Chat.findByIdAndUpdate(id, update);
     res.json({ success: true });
   } catch (error) {
     console.error('Update chat error:', error);
@@ -133,24 +120,14 @@ exports.updateChat = async (req, res) => {
 
 exports.deleteChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
 
-    // Delete all messages first
-    await new Promise((resolve, reject) => {
-      db.run('DELETE FROM messages WHERE chat_id = ?', [id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
 
-    // Delete chat
-    await new Promise((resolve, reject) => {
-      db.run('DELETE FROM chats WHERE id = ?', [id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    await Message.deleteMany({ chat_id: id });
+    await Chat.findByIdAndDelete(id);
 
     res.json({ success: true });
   } catch (error) {
@@ -161,16 +138,11 @@ exports.deleteChat = async (req, res) => {
 
 exports.pinChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
-
-    await new Promise((resolve, reject) => {
-      db.run('UPDATE chats SET pinned = 1, updated_at = datetime("now") WHERE id = ?', [id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
+    await Chat.findByIdAndUpdate(id, { pinned: true });
     res.json({ success: true });
   } catch (error) {
     console.error('Pin chat error:', error);
@@ -180,16 +152,11 @@ exports.pinChat = async (req, res) => {
 
 exports.unpinChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
-
-    await new Promise((resolve, reject) => {
-      db.run('UPDATE chats SET pinned = 0, updated_at = datetime("now") WHERE id = ?', [id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
+    await Chat.findByIdAndUpdate(id, { pinned: false });
     res.json({ success: true });
   } catch (error) {
     console.error('Unpin chat error:', error);
@@ -199,17 +166,12 @@ exports.unpinChat = async (req, res) => {
 
 exports.moveToFolder = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
     const { folder } = req.body;
-
-    await new Promise((resolve, reject) => {
-      db.run('UPDATE chats SET folder = ?, updated_at = datetime("now") WHERE id = ?', [folder || null, id], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
+    await Chat.findByIdAndUpdate(id, { folder: folder || null });
     res.json({ success: true });
   } catch (error) {
     console.error('Move to folder error:', error);
@@ -219,30 +181,27 @@ exports.moveToFolder = async (req, res) => {
 
 exports.searchChat = async (req, res) => {
   try {
-    const db = getDb();
     const { q } = req.query;
 
     if (!q || q.trim() === '') {
       return res.status(400).json({ success: false, error: 'Search query required' });
     }
 
-    const chats = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT DISTINCT c.*,
-          (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
-         FROM chats c
-         LEFT JOIN messages m ON m.chat_id = c.id
-         WHERE c.title LIKE ? OR m.content LIKE ?
-         ORDER BY c.pinned DESC, c.updated_at DESC`,
-        [`%${q}%`, `%${q}%`],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const regex = new RegExp(q.trim(), 'i');
+    const matchingChatIds = await Message.find({ content: regex }).distinct('chat_id');
 
-    res.json({ chats });
+    const chats = await Chat.find({ $or: [{ title: regex }, { _id: { $in: matchingChatIds } }] })
+      .sort({ pinned: -1, updated_at: -1 })
+      .lean();
+
+    const results = await Promise.all(
+      chats.map(async (c) => {
+        const message_count = await Message.countDocuments({ chat_id: c._id });
+        return formatChat(c, { message_count });
+      })
+    );
+
+    res.json({ chats: results });
   } catch (error) {
     console.error('Search chat error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -251,42 +210,32 @@ exports.searchChat = async (req, res) => {
 
 exports.exportChat = async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
 
-    const chat = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM chats WHERE id = ?', [id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    if (!isValidId(id)) {
+      return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
+    }
 
+    const chat = await Chat.findById(id).lean();
     if (!chat) {
       return res.status(404).json({ success: false, error: 'Chat tidak ditemukan' });
     }
 
-    const messages = await new Promise((resolve, reject) => {
-      db.all(
-        'SELECT role, content, timestamp FROM messages WHERE chat_id = ? ORDER BY timestamp ASC',
-        [id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const messages = await Message.find({ chat_id: id }).sort({ timestamp: 1 }).lean();
 
-    const exportData = {
+    res.json({
       chat: {
-        id: chat.id,
+        id: chat._id.toString(),
         title: chat.title,
         created_at: chat.created_at,
         updated_at: chat.updated_at
       },
-      messages: messages
-    };
-
-    res.json(exportData);
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp
+      }))
+    });
   } catch (error) {
     console.error('Export chat error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -295,38 +244,28 @@ exports.exportChat = async (req, res) => {
 
 exports.importChat = async (req, res) => {
   try {
-    const db = getDb();
     const { data } = req.body;
 
     if (!data || !data.chat || !data.messages) {
       return res.status(400).json({ success: false, error: 'Invalid import data' });
     }
 
-    const result = await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO chats (title, created_at, updated_at) VALUES (?, ?, ?)',
-        [data.chat.title, data.chat.created_at || new Date().toISOString(), new Date().toISOString()],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.lastID);
-        }
-      );
+    const chat = await Chat.create({
+      title: data.chat.title,
+      created_at: data.chat.created_at ? new Date(data.chat.created_at) : new Date(),
+      updated_at: new Date()
     });
 
     for (const msg of data.messages) {
-      await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO messages (chat_id, role, content, timestamp) VALUES (?, ?, ?, ?)',
-          [result, msg.role, msg.content, msg.timestamp || new Date().toISOString()],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
+      await Message.create({
+        chat_id: chat._id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date()
       });
     }
 
-    res.json({ id: result, success: true });
+    res.json({ id: chat._id.toString(), success: true });
   } catch (error) {
     console.error('Import chat error:', error);
     res.status(500).json({ success: false, error: error.message });
