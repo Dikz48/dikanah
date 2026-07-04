@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { getDb } = require('../database');
+const { Chat, Message } = require('../database');
 
 let currentAbortController = null;
 
@@ -118,46 +118,18 @@ exports.sendMessage = async (req, res) => {
       return res.status(401).json({ success: false, error: 'API Key belum dikonfigurasi.' });
     }
 
-    const db = getDb();
-
     let currentChatId = chatId;
     if (!currentChatId) {
-      const result = await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT INTO chats (title, created_at, updated_at) VALUES (?, datetime("now"), datetime("now"))',
-          [message.slice(0, 50)],
-          function (err) {
-            if (err) reject(err);
-            else resolve(this.lastID);
-          }
-        );
-      });
-      currentChatId = result;
+      const newChat = await Chat.create({ title: message.slice(0, 50) });
+      currentChatId = newChat._id;
     }
 
     // Save user message
-    await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)',
-        [currentChatId, 'user', message],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+    await Message.create({ chat_id: currentChatId, role: 'user', content: message });
 
     // Get chat history
-    const history = await new Promise((resolve, reject) => {
-      db.all(
-        'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY timestamp ASC',
-        [currentChatId],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const historyDocs = await Message.find({ chat_id: currentChatId }).sort({ timestamp: 1 }).lean();
+    const history = historyDocs.map((doc) => ({ role: doc.role, content: doc.content }));
 
     const finalSystemPrompt =
       systemPrompt ||
@@ -186,55 +158,20 @@ exports.sendMessage = async (req, res) => {
     res.write(`data: ${JSON.stringify({ content: fullResponse, done: false })}\n\n`);
 
     // Save assistant message
-    await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)',
-        [currentChatId, 'assistant', fullResponse],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+    await Message.create({ chat_id: currentChatId, role: 'assistant', content: fullResponse });
 
     // Update chat title if first message
-    const chatCount = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT COUNT(*) as count FROM messages WHERE chat_id = ?',
-        [currentChatId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row.count);
-        }
-      );
-    });
+    const chatCount = await Message.countDocuments({ chat_id: currentChatId });
 
     if (chatCount <= 2) {
       const title = message.slice(0, 50) + (message.length > 50 ? '...' : '');
-      await new Promise((resolve, reject) => {
-        db.run(
-          'UPDATE chats SET title = ?, updated_at = datetime("now") WHERE id = ?',
-          [title, currentChatId],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      await Chat.findByIdAndUpdate(currentChatId, { title });
     } else {
-      await new Promise((resolve, reject) => {
-        db.run(
-          'UPDATE chats SET updated_at = datetime("now") WHERE id = ?',
-          [currentChatId],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      // findByIdAndUpdate({}) tetap bikin updated_at ke-refresh otomatis (mongoose timestamps)
+      await Chat.findByIdAndUpdate(currentChatId, {});
     }
 
-    res.write(`data: ${JSON.stringify({ done: true, chatId: currentChatId })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, chatId: currentChatId.toString() })}\n\n`);
     res.end();
   } catch (error) {
     console.error('[chat] Error:', error.message);
@@ -287,31 +224,13 @@ exports.regenerateMessage = async (req, res) => {
       return res.status(400).json({ success: false, error: 'chatId dan messageId diperlukan' });
     }
 
-    const db = getDb();
-
     // Delete last assistant message
-    await new Promise((resolve, reject) => {
-      db.run(
-        'DELETE FROM messages WHERE id = ? AND chat_id = ? AND role = "assistant"',
-        [messageId, chatId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+    await Message.deleteOne({ _id: messageId, chat_id: chatId, role: 'assistant' });
 
     // Get last user message
-    const lastUserMsg = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT content FROM messages WHERE chat_id = ? AND role = "user" ORDER BY timestamp DESC LIMIT 1',
-        [chatId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    const lastUserMsg = await Message.findOne({ chat_id: chatId, role: 'user' })
+      .sort({ timestamp: -1 })
+      .lean();
 
     if (!lastUserMsg) {
       return res.status(404).json({ success: false, error: 'Tidak ada pesan user untuk diregenerate' });
