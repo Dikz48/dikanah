@@ -1,25 +1,17 @@
-const { getDb } = require('../database');
+const { Setting } = require('../database');
 
 exports.getSettings = async (req, res) => {
   try {
-    const db = getDb();
+    const rows = await Setting.find({}).lean();
 
-    const settings = await new Promise((resolve, reject) => {
-      db.all('SELECT key, value FROM settings', (err, rows) => {
-        if (err) reject(err);
-        else {
-          const settingsObj = {};
-          rows.forEach(row => {
-            settingsObj[row.key] = row.value;
-          });
-          resolve(settingsObj);
-        }
-      });
+    const settingsObj = {};
+    rows.forEach((row) => {
+      settingsObj[row.key] = row.value;
     });
 
-    settings.apiKeyConfigured = !!process.env.HF_API_KEY;
+    settingsObj.apiKeyConfigured = !!process.env.HF_API_KEY;
 
-    res.json(settings);
+    res.json(settingsObj);
   } catch (error) {
     console.error('Get settings error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -28,7 +20,6 @@ exports.getSettings = async (req, res) => {
 
 exports.updateSettings = async (req, res) => {
   try {
-    const db = getDb();
     const updates = req.body;
 
     if (!updates || typeof updates !== 'object') {
@@ -36,16 +27,7 @@ exports.updateSettings = async (req, res) => {
     }
 
     for (const [key, value] of Object.entries(updates)) {
-      await new Promise((resolve, reject) => {
-        db.run(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-          [key, value],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      await Setting.updateOne({ key }, { $set: { key, value } }, { upsert: true });
     }
 
     res.json({ success: true });
