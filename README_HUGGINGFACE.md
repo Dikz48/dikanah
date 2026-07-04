@@ -1,17 +1,23 @@
-# DIKZ AI — Sudah Pindah ke HuggingFace Inference API
+# DIKZ AI — HuggingFace Inference API + MongoDB
 
-Project ini sudah di-switch dari Groq/OpenAI ke HuggingFace Inference API.
-Frontend TIDAK diubah sama sekali, semua tetap jalan lewat `/api/chat/send`.
+Project ini sudah di-switch:
+- Provider AI: Groq/OpenAI → **HuggingFace Inference API**
+- Database: SQLite → **MongoDB (Atlas)**
+
+Frontend TIDAK diubah tampilannya, semua tetap jalan lewat `/api/chat/send`.
 
 ## Cara Test (3 langkah)
 
-1. Buka file `.env` (sudah disiapkan di root folder ini), ganti baris:
+1. Buka file `.env` (atau `ENV_SETUP.txt` kalau `.env` gak keliatan di HP), isi 2 hal ini:
    ```
-   HF_API_KEY=hf_your_huggingface_api_key_here
+   HF_API_KEY=hf_xxxxxxxxxx
+   MONGODB_URI=mongodb+srv://Handika25:PASSWORD_ASLI_KAMU@cluster0.yyzu9xj.mongodb.net/dikzai?appName=Cluster0
    ```
-   dengan API key HuggingFace kamu. Ambil di:
-   https://huggingface.co/settings/tokens
-   (bikin token baru dengan permission minimal "Read")
+   - `HF_API_KEY` -> ambil di https://huggingface.co/settings/tokens
+   - `MONGODB_URI` -> ganti `PASSWORD_ASLI_KAMU` dengan password database Atlas kamu yang
+     beneran (bagian `<db_password>` di connection string Atlas emang harus diganti manual,
+     bukan otomatis kesubstitusi). Saya juga nambahin `/dikzai` sebelum tanda `?` sebagai nama
+     database - kalau gak dikasih nama, Mongo bakal otomatis pakai database bernama `test`.
 
 2. Install dependency:
    ```
@@ -22,24 +28,33 @@ Frontend TIDAK diubah sama sekali, semua tetap jalan lewat `/api/chat/send`.
    ```
    npm start
    ```
-   atau untuk mode dev (auto-restart):
-   ```
-   npm run dev
-   ```
 
-Buka browser ke `http://localhost:3000`, langsung bisa chat.
+Buka `http://localhost:3000`, langsung bisa chat, history-nya kesimpen di MongoDB.
 
-## File yang Berubah dari Versi Lama
+## File yang Berubah
 
 | File | Perubahan |
 |---|---|
-| `controllers/chatController.js` | Full rewrite — pakai `axios` ke HuggingFace, bukan `openai` SDK lagi |
-| `controllers/settingsController.js` | Cek `HF_API_KEY` bukan `OPENAI_API_KEY` |
-| `server.js` | Cek `HF_API_KEY` bukan `OPENAI_API_KEY`, log model default HF |
-| `.env` / `.env.example` | Konfigurasi HuggingFace |
-| `package.json` | Dependency `openai` diganti `axios` |
-| `routes/chat.js` | **Tidak diubah** — cuma router tipis, logic-nya di controller |
-| `public/*` | **Tidak diubah** — frontend sudah kompatibel dari awal |
+| `controllers/chatController.js` | Call ke HuggingFace pakai `axios`, simpan pesan ke MongoDB (Mongoose) |
+| `controllers/settingsController.js` | Setting disimpan/diambil dari koleksi MongoDB, cek `HF_API_KEY` |
+| `controllers/historyController.js` | Full rewrite - semua query SQL diganti query Mongoose (model `Chat` & `Message`) |
+| `database.js` | Full rewrite - dari `sqlite3` ke `mongoose`, connect ke MongoDB Atlas |
+| `server.js` | Cek `HF_API_KEY` bukan `OPENAI_API_KEY` |
+| `.env` / `.env.example` | Tambah `MONGODB_URI`, config HuggingFace |
+| `package.json` | `sqlite3` -> `mongoose`, `openai` -> `axios` |
+| `public/js/chat.js`, `public/js/history.js` | ID chat sekarang dikasih tanda kutip di `onclick` (`selectChat('${chat.id}')`), karena ID MongoDB itu string panjang (contoh: `65f2a1b2c3d4e5f6a7b8c9d0`), bukan angka kayak SQLite. Tanpa kutip, tombol pin/rename/delete/buka chat bakal error di browser. |
+| `routes/*`, `middleware/*` | **Tidak diubah** |
+
+## Kalau Ada Error
+
+- **"MONGODB_URI belum diset di .env"** -> isi dulu `MONGODB_URI` di `.env`.
+- **"MongooseServerSelectionError" / connection timeout** -> cek 3 hal:
+  1. Password di connection string masih placeholder -> ganti dengan password asli akun database Atlas kamu.
+  2. IP kamu belum di-whitelist di MongoDB Atlas -> buka Atlas dashboard -> **Network Access** -> **Add IP Address** -> pilih **Allow Access from Anywhere** (`0.0.0.0/0`) kalau lagi testing.
+  3. Username di connection string (`Handika25`) harus sama persis dengan user database yang kamu bikin di Atlas.
+- **"API Key belum dikonfigurasi"** -> `HF_API_KEY` di `.env` masih kosong/placeholder.
+- **Error 503 dari HuggingFace** -> model lagi loading di server HF, kirim ulang pesan setelah beberapa detik (sistem udah pakai `wait_for_model: true` jadi nunggu otomatis).
+- **Model diganti** -> tinggal ubah `MODEL=` di `.env`, gak perlu ubah kode.
 
 ## Kalau Buka Zip Lewat HP (file `.env` gak kelihatan)
 
@@ -48,25 +63,20 @@ nyembunyiin dia otomatis. Ada file kembarannya di `ENV_SETUP.txt` (isi sama pers
 cuma namanya gak diawali titik jadi keliatan normal). Caranya:
 
 1. Buka `ENV_SETUP.txt` pakai text editor apa aja di HP
-2. Edit baris `HF_API_KEY=hf_your_huggingface_api_key_here` jadi API key kamu
+2. Edit `HF_API_KEY` dan `MONGODB_URI` sesuai punya kamu
 3. Save
-4. Rename file itu jadi `.env` (paling gampang pakai app **ZArchiver** atau **Files by Google** — tap-hold file → Rename → hapus `ENV_SETUP.txt` ganti jadi `.env`)
-5. Kalau HP kamu gak mau nyimpen file tanpa nama depan (cuma ekstensi), taruh project ini ke laptop/PC dulu buat jalanin `npm start` — Node.js server emang harus dijalanin dari komputer, bukan dari HP langsung
+4. Rename file itu jadi `.env` (pakai app **ZArchiver** atau **Files by Google** - tap-hold file -> Rename)
+5. Kalau mau jalanin project-nya langsung dari HP, pakai **Termux** - di Termux file `.env`
+   bisa diedit langsung pakai `nano .env`, gak perlu rename-rename.
 
-**Catatan penting:** project ini (Express.js server) HARUS dijalanin di laptop/PC/VPS pakai Node.js —
-gak bisa langsung jalan cuma dari HP. HP cuma buat edit/liat file aja. Kalau belum ada laptop,
-kamu bisa juga pakai layanan online kayak Replit atau Railway buat upload & jalanin project ini dari HP.
-
-## Kalau Ada Error
-
-- **"API Key belum dikonfigurasi"** → `HF_API_KEY` di `.env` masih kosong/placeholder, isi dulu.
-- **Respons lambat / timeout** → model gratis HuggingFace kadang perlu "wake up" dulu (cold start), sistem sudah pakai `wait_for_model: true` jadi otomatis nunggu, tapi bisa sampai ±20-30 detik di percobaan pertama.
-- **Error 503 dari HuggingFace** → model lagi loading di server HF, coba kirim ulang pesan setelah beberapa detik.
-- **Model diganti** → tinggal ubah `MODEL=` di `.env`, tidak perlu ubah kode.
+**Catatan penting:** project ini (Express.js server) harus dijalanin pakai Node.js - bisa dari
+laptop/PC/VPS, atau dari HP pakai **Termux**. Gak bisa langsung dibuka kayak file biasa tanpa dijalanin.
 
 ## Catatan Teknis
 
-HuggingFace Inference API (endpoint `text-generation`) balas teks **penuh sekaligus**,
-bukan token-per-token seperti OpenAI/Groq streaming. Backend tetap mengirim ke frontend
-dalam format SSE (`data: {...}\n\n`) supaya kompatibel dengan kode `chat.js` yang sudah ada —
-cuma isinya satu event `content` besar, lalu langsung ditutup dengan `done:true`.
+- HuggingFace Inference API balas teks **penuh sekaligus** (bukan token-per-token kayak
+  OpenAI/Groq streaming). Backend tetap kirim ke frontend dalam format SSE
+  (`data: {...}\n\n`) biar kompatibel sama `chat.js` yang udah ada - cuma isinya
+  satu event `content` besar, lalu langsung ditutup `done:true`.
+- ID chat & message sekarang pakai MongoDB ObjectId (string 24 karakter), bukan angka urut
+  kayak SQLite. Ini udah disesuaikan di semua controller dan 2 file frontend yang butuh.
