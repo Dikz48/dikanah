@@ -1,125 +1,80 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const mongoose = require('mongoose');
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'database.db');
+const MONGODB_URI = process.env.MONGODB_URI;
 
-let db = null;
+// ===== Schemas =====
+const chatSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    pinned: { type: Boolean, default: false },
+    folder: { type: String, default: null }
+  },
+  { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } }
+);
 
-function initDatabase() {
-  return new Promise((resolve, reject) => {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+const messageSchema = new mongoose.Schema({
+  chat_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true, index: true },
+  role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
+  content: { type: String, required: true },
+  timestamp: { type: Date, default: Date.now }
+});
 
-    db = new sqlite3.Database(DB_PATH, (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      console.log('✅ Database connected');
-      createTables().then(resolve).catch(reject);
-    });
-  });
-}
+const settingSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: String, required: true }
+});
 
-function createTables() {
-  return new Promise((resolve, reject) => {
-    const queries = [
-      `CREATE TABLE IF NOT EXISTS chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        pinned INTEGER DEFAULT 0,
-        folder TEXT DEFAULT NULL
-      )`,
+const folderSchema = new mongoose.Schema(
+  { name: { type: String, required: true } },
+  { timestamps: { createdAt: 'created_at', updatedAt: false } }
+);
 
-      `CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id INTEGER NOT NULL,
-        role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-        content TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
-      )`,
+const Chat = mongoose.model('Chat', chatSchema);
+const Message = mongoose.model('Message', messageSchema);
+const Setting = mongoose.model('Setting', settingSchema);
+const Folder = mongoose.model('Folder', folderSchema);
 
-      `CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE NOT NULL,
-        value TEXT NOT NULL
-      )`,
+async function initDatabase() {
+  if (!MONGODB_URI) {
+    throw new Error('MONGODB_URI belum diset di .env');
+  }
 
-      `CREATE TABLE IF NOT EXISTS folders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
+  await mongoose.connect(MONGODB_URI);
+  console.log('✅ MongoDB connected');
 
-      `CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at DESC)`,
-      `CREATE INDEX IF NOT EXISTS idx_chats_pinned ON chats(pinned)`
-    ];
+  // Insert default settings kalau belum ada (setara "INSERT OR IGNORE" versi SQLite lama)
+  const defaults = [
+    { key: 'model', value: process.env.MODEL || 'Qwen/Qwen2.5-7B-Instruct' },
+    { key: 'temperature', value: process.env.TEMPERATURE || '0.7' },
+    { key: 'max_tokens', value: process.env.MAX_TOKENS || '1024' },
+    { key: 'top_p', value: '1.0' },
+    { key: 'theme', value: 'dark' }
+  ];
 
-    db.serialize(() => {
-      let error = null;
-      queries.forEach(query => {
-        db.run(query, (err) => {
-          if (err) error = err;
-        });
-      });
-
-      if (error) {
-        reject(error);
-      } else {
-        // Insert default settings if not exists
-        db.run(
-          `INSERT OR IGNORE INTO settings (key, value) VALUES 
-            ('model', ?),
-            ('temperature', ?),
-            ('max_tokens', ?),
-            ('top_p', ?),
-            ('theme', ?)`,
-          [
-            process.env.MODEL || 'gpt-4.1-mini',
-            process.env.TEMPERATURE || '0.7',
-            process.env.MAX_TOKENS || '4096',
-            '1.0',
-            'dark'
-          ],
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      }
-    });
-  });
+  for (const def of defaults) {
+    await Setting.updateOne({ key: def.key }, { $setOnInsert: def }, { upsert: true });
+  }
 }
 
 function getDb() {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDatabase() first.');
+  // Dipertahankan supaya kalau ada kode lama yang manggil getDb() tidak langsung crash
+  // tanpa pesan yang jelas. Semua controller baru sudah pakai model Mongoose langsung.
+  if (mongoose.connection.readyState !== 1) {
+    throw new Error('Database (MongoDB) belum terkoneksi. Pastikan initDatabase() sudah dipanggil.');
   }
-  return db;
+  return mongoose.connection;
 }
 
 function closeDatabase() {
-  return new Promise((resolve, reject) => {
-    if (db) {
-      db.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    } else {
-      resolve();
-    }
-  });
+  return mongoose.connection.close();
 }
 
 module.exports = {
   initDatabase,
   getDb,
-  closeDatabase
+  closeDatabase,
+  Chat,
+  Message,
+  Setting,
+  Folder
 };
